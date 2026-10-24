@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -u
+printf '%s\n' '=== PCI ==='
+lspci -nnk -d 10de:042[0-9a-f] || true
+printf '\n%s\n' '=== modules ==='
+lsmod | grep -E '^(g86lite|nouveau)\b' || true
+printf '\n%s\n' '=== DRM ==='
+for c in /sys/class/drm/card[0-9]*; do
+    [[ -e "$c" ]] || continue
+    echo "[$c]"
+    if [[ -e "$c/device/vendor" ]]; then
+        echo "  PCI: $(cat "$c/device/vendor"):$(cat "$c/device/device")"
+    fi
+    for p in "$c"-*; do
+        [[ -e "$p/status" ]] || continue
+        echo "  $(basename "$p"): $(cat "$p/status") modes=$(tr '\n' ' ' < "$p/modes")"
+    done
+done
+printf '\n%s\n' '=== g86lite log ==='
+dmesg | grep -iE 'g86lite|10de.*042|drm' | tail -n 120 || true

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log() { printf '[g86lite] %s\n' "$*"; }
+
+G86_PATTERN='10de:042[0-9a-f]'
+
+if ! lspci -Dnn -d "$G86_PATTERN" >/dev/null 2>&1; then
+    log 'ERROR: No G86 GPU (PCI 10de:0420-042f) found.'
+    exit 1
+fi
+
+if lsmod | awk '$1=="nouveau"{found=1} END{exit !found}'; then
+    log 'ERROR: nouveau is loaded. Refusing to start graphical target.'
+    exit 1
+fi
+
+if ! lsmod | awk '$1=="g86lite"{found=1} END{exit !found}'; then
+    log 'ERROR: g86lite module did not load.'
+    dmesg | tail -n 100 >&2 || true
+    exit 1
+fi
+
+if ! grep -q '^g86lite ' /proc/modules; then
+    log 'ERROR: g86lite missing from /proc/modules.'
+    exit 1
+fi
+
+PCI_DEV=$(lspci -Dnn -d "$G86_PATTERN" | awk 'NR==1{print $1}')
+if [[ -z "$PCI_DEV" || ! -L "/sys/bus/pci/devices/$PCI_DEV/driver" ||
+      "$(basename "$(readlink -f "/sys/bus/pci/devices/$PCI_DEV/driver")")" != 'g86lite' ]]; then
+    log "ERROR: PCI $PCI_DEV is not bound to the g86lite driver."
+    exit 1
+fi
+
+card=''
+for c in /sys/class/drm/card[0-9]*; do
+    [[ -e "$c/device/vendor" ]] || continue
+    [[ "$(cat "$c/device/vendor")" == '0x10de' ]] || continue
+    dev_id=$(cat "$c/device/device" 2>/dev/null || true)
+    if [[ "$dev_id" =~ ^0x042[0-9a-fA-F]$ ]]; then
+        card="$(basename "$c")"
+        break
+    fi
+done
+
+if [[ -z "$card" ]]; then
+    log 'ERROR: no DRM card backed by G86 GPU found.'
+    exit 1
+fi
+
+mode='unknown'
+conn=$(find "/sys/class/drm/$card"-* -maxdepth 0 -type l 2>/dev/null | head -n1 || true)
+if [[ -n "$conn" && -r "$conn/modes" ]]; then
+    mode=$(head -n1 "$conn/modes" || true)
+fi
+
+log "OK: $card is owned by g86lite; fixed mode: $mode"

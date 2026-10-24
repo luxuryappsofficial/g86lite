@@ -1,0 +1,20 @@
+G86Lite standalone build verification
+=====================================
+Source version: 0.3.1
+
+Actually compiled in this environment:
+  Linux headers: 6.12.96+deb13-amd64
+  Command: make -j2 W=1 KDIR=/usr/src/linux-headers-6.12.96+deb13-amd64
+  Result: success, zero compiler warnings.
+
+Static module checks:
+  modinfo depends: drm,drm_kms_helper,drm_shmem_helper
+  nm -u g86lite.ko | grep -i nouveau: no matches
+  PCI alias: 10de:0427
+
+Arch target:
+  Recommended: linux-lts 6.18.x + linux-lts-headers.
+  Source has a Linux >=6.17 compatibility callback for the changed
+  drm_mode_config_funcs.fb_create / drm_gem_fb_create_with_dirty API.
+  The target machine still MUST compile the module via DKMS against its own
+  installed headers. The reference .ko here must not be loaded on Arch.

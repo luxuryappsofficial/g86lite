@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    echo 'Run as root: sudo ./tools/g86lite-install-arch' >&2
+    exit 1
+fi
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+VER=0.3.1
+SRC="/usr/src/g86lite-$VER"
+
+if ! command -v pacman >/dev/null; then
+    echo 'This installer is for Arch Linux.' >&2
+    exit 1
+fi
+
+# Pin the experiment to Arch's LTS kernel.  Do not infer the target kernel
+# from uname: when this script is run in an arch-chroot, uname still reports
+# the live installer's kernel.
+pacman -S --needed --noconfirm \
+    linux-lts linux-lts-headers linux-firmware \
+    base-devel dkms grub networkmanager pciutils \
+    xorg-server xorg-xinit xorg-xrandr \
+    xfce4 lightdm lightdm-gtk-greeter \
+    mesa
+
+install -d "$SRC"
+install -m644 "$ROOT/kernel/g86lite.c" "$SRC/g86lite.c"
+install -m644 "$ROOT/kernel/Makefile" "$SRC/Makefile"
+install -m644 "$ROOT/kernel/dkms.conf" "$SRC/dkms.conf"
+
+# Replace an older local registration cleanly.
+dkms remove -m g86lite -v "$VER" --all >/dev/null 2>&1 || true
+dkms add -m g86lite -v "$VER"
+
+# Build only for linux-lts. This intentionally avoids Arch mainline DRM API
+# churn while the standalone driver is still experimental.
+LTS_KVER=""
+for d in /usr/lib/modules/*-lts; do
+    [[ -d "$d/build" ]] || continue
+    LTS_KVER="$(basename "$d")"
+done
+if [[ -z "$LTS_KVER" ]]; then
+    echo 'linux-lts module tree with headers not found.' >&2
+    exit 1
+fi
+dkms build -m g86lite -v "$VER" -k "$LTS_KVER"
+dkms install -m g86lite -v "$VER" -k "$LTS_KVER"
+
+install -Dm644 "$ROOT/etc/modprobe.d/g86lite-blacklist-nouveau.conf" \
+    /etc/modprobe.d/g86lite-blacklist-nouveau.conf
+install -Dm644 "$ROOT/etc/X11/xorg.conf.d/20-g86lite.conf" \
+    /etc/X11/xorg.conf.d/20-g86lite.conf
+install -Dm755 "$ROOT/tools/g86lite-verify" /usr/local/sbin/g86lite-verify
+install -Dm755 "$ROOT/tools/g86lite-status" /usr/local/bin/g86lite-status
+install -Dm644 "$ROOT/etc/systemd/system/g86lite-verify.service" \
+    /etc/systemd/system/g86lite-verify.service
+install -Dm644 "$ROOT/etc/systemd/system/lightdm.service.d/g86lite.conf" \
+    /etc/systemd/system/lightdm.service.d/g86lite.conf
+
+echo g86lite > /etc/modules-load.d/g86lite.conf
+
+# Keep GL off the damaged/untested 3D engine. Do not force Gallium globally,
+# so a future standalone VP2 backend can coexist with this setup.
+if ! grep -q '^LIBGL_ALWAYS_SOFTWARE=' /etc/environment 2>/dev/null; then
+    echo 'LIBGL_ALWAYS_SOFTWARE=true' >> /etc/environment
+fi
+
+systemctl daemon-reload
+systemctl enable g86lite-verify.service lightdm.service
+
+# Configure GRUB to leave a linear framebuffer active for g86lite to adopt.
+# 1920x1080 is tried first for an external FHD display; the XPS panel fallback
+# is normally 1280x800. Unsupported VBE modes are skipped by GRUB.
+if [[ -f /etc/default/grub ]] && command -v grub-mkconfig >/dev/null; then
+    cp -a /etc/default/grub /etc/default/grub.g86lite-backup
+    # Hard kernel-side blacklist as a second line of defence.
+    if grep -q '^GRUB_CMDLINE_LINUX=' /etc/default/grub; then
+        if ! grep '^GRUB_CMDLINE_LINUX=' /etc/default/grub | grep -q 'module_blacklist=nouveau'; then
+            sed -i 's/^GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 module_blacklist=nouveau"/' /etc/default/grub
+        fi
+    else
+        echo 'GRUB_CMDLINE_LINUX="module_blacklist=nouveau"' >> /etc/default/grub
+    fi
+    if grep -q '^GRUB_GFXMODE=' /etc/default/grub; then
+        sed -i 's/^GRUB_GFXMODE=.*/GRUB_GFXMODE="1920x1080x32,1280x800x32,1024x768x32,auto"/' /etc/default/grub
+    else
+        echo 'GRUB_GFXMODE="1920x1080x32,1280x800x32,1024x768x32,auto"' >> /etc/default/grub
+    fi
+    if grep -q '^GRUB_GFXPAYLOAD_LINUX=' /etc/default/grub; then
+        sed -i 's/^GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX=keep/' /etc/default/grub
+    else
+        echo 'GRUB_GFXPAYLOAD_LINUX=keep' >> /etc/default/grub
+    fi
+    grub-mkconfig -o /boot/grub/grub.cfg
+else
+    echo
+    echo 'NOTE: GRUB was not detected. Your bootloader must keep a 32-bpp VBE/EFI framebuffer.'
+fi
+
+# Make sure nouveau cannot be hiding in a regenerated initramfs.
+mkinitcpio -P
+
+echo
+echo 'G86Lite v3.0.1 installed.'
+echo 'Reboot with the desired display connected at power-on.'
+echo "Target kernel: $LTS_KVER"
+echo 'Boot the linux-lts GRUB entry, then run: g86lite-status'

@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify G86Lite standalone DRM before display manager
+After=systemd-modules-load.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/g86lite-verify
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target
