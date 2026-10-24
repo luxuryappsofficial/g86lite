@@ -121,32 +121,6 @@ g86lite-status
 
 ---
 
-## 📁 Package Contents
-
-g86lite-v3/
-├── arch/
-│   └── ARCH-XFCE-SETUP.md          # Reference setup guide for Arch Linux + XFCE
-├── docs/
-│   └── VP2-STATUS.md               # PureVideo HD 2 / hardware decode details
-├── etc/
-│   ├── modprobe.d/
-│   │   └── g86lite-blacklist-nouveau.conf   # Nouveau blacklist configuration
-│   ├── systemd/system/
-│   │   ├── g86lite-verify.service           # Boot verification service
-│   │   └── lightdm.service.d/
-│   │       └── g86lite.conf                 # LightDM service override
-│   └── X11/xorg.conf.d/
-│       └── 20-g86lite.conf                  # Modesetting DDX configuration
-├── kernel/
-│   ├── dkms.conf                   # DKMS configuration
-│   ├── g86lite.c                   # Driver C source code
-│   └── Makefile                    # Module Makefile
-└── tools/
-    ├── g86lite-install-arch        # Arch Linux automated installer
-    ├── g86lite-status              # Status and diagnostic script
-    └── g86lite-verify              # Boot validation script
-
----
 
 ## ⚙️ Architecture & Technical Details
 
