@@ -1,4 +1,4 @@
-# ⚡ g86lite 
+# ⚡ g86lite
 > **A minimal, fallback DRM/KMS display driver for the NVIDIA G86 GPU family on Linux.**
 
 [![License: GPL-2.0](https://img.shields.io/badge/License-GPL%202.0-blue.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 ## ⚠️ Beta Software & Disclaimer
 
-* **BETA / EXPERIMENTAL RELEASE:** This project is currently in active development (`v3.0.1-beta.1`). While designed to bypass standard lockups, hardware stability varies heavily across degraded silicon. **System freezes, kernel panics, or graphical artifacts can still happen depending on the physical condition of your chip.**
+* **BETA / EXPERIMENTAL RELEASE:** This project is currently in active beta development. While designed to bypass standard lockups, hardware stability varies heavily across degraded silicon. **System freezes, kernel panics, or graphical artifacts can still happen depending on the physical condition of your chip.**
 * **NO WARRANTY / DISCLAIMER:** This software is distributed under the GNU General Public License v2.0 in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. Use it entirely at your own risk. The author assumes no responsibility for data loss, system hangs, or hardware damage.
 
 ---
@@ -64,63 +64,127 @@ Automatically binds to PCI IDs `10de:0420` through `10de:042f`:
 ### Option 1: Generic Linux (Debian, Ubuntu, Fedora, openSUSE)
 
 #### 1. Install Build Dependencies & DKMS
+
 * **Debian / Ubuntu / Linux Mint:**
-  sudo apt update
-  sudo apt install build-essential dkms linux-headers-$(uname -r) pciutils xserver-xorg-video-all
+```bash
+sudo apt update
+sudo apt install build-essential dkms linux-headers-$(uname -r) pciutils xserver-xorg-video-all
+```
+
 * **Fedora / RHEL:**
-  sudo dnf install gcc make dkms kernel-devel-$(uname -r) pciutils xorg-x11-server-Xorg
+```bash
+sudo dnf install gcc make dkms kernel-devel-$(uname -r) pciutils xorg-x11-server-Xorg
+```
+
 * **openSUSE:**
-  sudo zypper install gcc make dkms kernel-default-devel pciutils
+```bash
+sudo zypper install gcc make dkms kernel-default-devel pciutils
+```
 
 #### 2. Register & Build via DKMS
+```bash
 sudo cp -r kernel /usr/src/g86lite-3.0.1-beta.1
 sudo dkms add -m g86lite -v 3.0.1-beta.1
 sudo dkms build -m g86lite -v 3.0.1-beta.1
 sudo dkms install -m g86lite -v 3.0.1-beta.1
+```
 
 #### 3. Blacklist Nouveau & Enable Auto-Load
+```bash
 sudo cp etc/modprobe.d/g86lite-blacklist-nouveau.conf /etc/modprobe.d/
 echo "g86lite" | sudo tee /etc/modules-load.d/g86lite.conf
+```
 
 #### 4. Configure GRUB Bootloader
-Edit `/etc/default/grub` and ensure the following lines are set:
+Open `/etc/default/grub` in an editor:
+```bash
+sudo nano /etc/default/grub
+```
+
+Ensure the following parameters are present:
+```text
 GRUB_CMDLINE_LINUX="module_blacklist=nouveau"
 GRUB_GFXMODE="1920x1080x32,1280x800x32,auto"
 GRUB_GFXPAYLOAD_LINUX=keep
+```
 
-Update GRUB and initramfs:
+Update GRUB and regenerate your initial ramdisk:
+
 * **Debian / Ubuntu:**
-  sudo update-grub
-  sudo update-initramfs -u
+```bash
+sudo update-grub
+sudo update-initramfs -u
+```
+
 * **Fedora / RHEL:**
-  sudo grub2-mkconfig -o /boot/grub2/grub.cfg
-  sudo dracut -f
+```bash
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo dracut -f
+```
 
 #### 5. Install Xorg Configuration & Utilities
+```bash
 sudo cp etc/X11/xorg.conf.d/20-g86lite.conf /etc/X11/xorg.conf.d/
 sudo install -m 755 tools/g86lite-status /usr/local/bin/g86lite-status
 sudo install -m 755 tools/g86lite-verify /usr/local/sbin/g86lite-verify
+```
 
 ---
 
 ### Option 2: Automated Install (Arch Linux)
 
 From the root of the extracted package directory:
+```bash
 chmod +x tools/*
 sudo ./tools/g86lite-install-arch
+```
 
 *(See `arch/ARCH-XFCE-SETUP.md` for lightdm and XFCE setup).*
 
 ---
 
 ### Verification After Reboot
-sudo reboot
 
-Once back in the system, run diagnostics:
+Reboot into the newly configured system:
+```bash
+sudo reboot
+```
+
+After reaching the desktop, run the status utility:
+```bash
 g86lite-status
+```
 
 ---
 
+## 📁 Package Contents
+
+```text
+g86lite-v3/
+├── arch/
+│   └── ARCH-XFCE-SETUP.md          # Reference setup guide for Arch Linux + XFCE
+├── docs/
+│   └── VP2-STATUS.md               # PureVideo HD 2 / hardware decode details
+├── etc/
+│   ├── modprobe.d/
+│   │   └── g86lite-blacklist-nouveau.conf   # Nouveau blacklist configuration
+│   ├── systemd/system/
+│   │   ├── g86lite-verify.service           # Boot verification service
+│   │   └── lightdm.service.d/
+│   │       └── g86lite.conf                 # LightDM service override
+│   └── X11/xorg.conf.d/
+│       └── 20-g86lite.conf                  # Modesetting DDX configuration
+├── kernel/
+│   ├── dkms.conf                   # DKMS configuration
+│   ├── g86lite.c                   # Driver C source code
+│   └── Makefile                    # Module Makefile
+└── tools/
+    ├── g86lite-install-arch        # Arch Linux automated installer
+    ├── g86lite-status              # Status and diagnostic script
+    └── g86lite-verify              # Boot validation script
+```
+
+---
 
 ## ⚙️ Architecture & Technical Details
 
